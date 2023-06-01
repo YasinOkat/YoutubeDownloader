@@ -16,7 +16,7 @@ A simple YouTube downloader GUI built with PyQt5 and pytube.
 
 The YouTube Downloader is a graphical user interface (GUI) application that allows you to download videos or audio from YouTube. It provides a convenient way to select the desired video resolution and download format (MP3 or MP4). The application is built using PyQt5 for the GUI and pytube library for YouTube video/audio downloads.
 
-
+![Screenshot](app.png)
 
 ## Features
 
