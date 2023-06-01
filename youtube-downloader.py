@@ -6,7 +6,7 @@ from PyQt5.QtCore import QThread, pyqtSignal, QTimer
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QLineEdit, QPushButton, QRadioButton, QFileDialog, \
-    QComboBox, QProgressBar, QWidget, QHBoxLayout
+    QComboBox, QProgressBar, QWidget, QHBoxLayout, QMessageBox
 from pytube import YouTube
 
 
@@ -63,6 +63,7 @@ class CustomTitleBar(QWidget):
 
 class DownloadThread(QThread):
     progress_signal = pyqtSignal(int)
+    error_signal = pyqtSignal(str)
 
     def __init__(self, url, save_path, resolution=None):
         super().__init__()
@@ -76,53 +77,66 @@ class DownloadThread(QThread):
                 self.download_video()
             else:
                 self.download_audio()
+        except requests.exceptions.ConnectionError:
+            self.error_signal.emit("Connection error. Please check your internet connection.")
+        except requests.exceptions.Timeout:
+            self.error_signal.emit("Request timed out. Please try again later.")
+        except requests.exceptions.RequestException:
+            self.error_signal.emit("An error occurred during the download. Please try again.")
         except Exception as e:
-            self.progress_signal.emit(-1)
-            print("Error:", str(e))
+            self.error_signal.emit(str(e))
 
     def download_video(self):
-        yt = YouTube(self.url)
-        video = yt.streams.filter(res=self.resolution).first()
-        video_file = os.path.join(self.save_path, f"{video.default_filename}")
-        response = requests.get(video.url, stream=True)
+        try:
+            yt = YouTube(self.url)
+            video = yt.streams.filter(res=self.resolution).first()
+            video_file = os.path.join(self.save_path, f"{video.default_filename}")
+            response = requests.get(video.url, stream=True)
 
-        total_size = int(response.headers.get("Content-Length", 0))
-        downloaded_size = 0
+            total_size = int(response.headers.get("Content-Length", 0))
+            downloaded_size = 0
 
-        with open(video_file, "wb") as f:
-            for chunk in response.iter_content(chunk_size=1024):
-                if chunk:
-                    f.write(chunk)
-                    downloaded_size += len(chunk)
-                    progress = int((downloaded_size / total_size) * 100)
-                    self.progress_signal.emit(progress)
+            with open(video_file, "wb") as f:
+                for chunk in response.iter_content(chunk_size=1024):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded_size += len(chunk)
+                        progress = int((downloaded_size / total_size) * 100)
+                        self.progress_signal.emit(progress)
 
-        self.progress_signal.emit(100)
+            self.progress_signal.emit(100)
+        except KeyError:
+            self.error_signal.emit("Selected resolution is not available for this video.")
+        except Exception as e:
+            self.error_signal.emit(str(e))
 
     def download_audio(self):
-        yt = YouTube(self.url)
-        audio = yt.streams.filter(only_audio=True).first()
-        audio_file = os.path.join(self.save_path, f"{audio.default_filename}")
-        audio.download(self.save_path)
-        mp3_file = os.path.join(self.save_path, "audio.mp3")
+        try:
+            yt = YouTube(self.url)
+            audio = yt.streams.filter(only_audio=True).first()
+            audio_file = os.path.join(self.save_path, f"{audio.default_filename}")
+            audio.download(self.save_path)
+            mp3_file = os.path.join(self.save_path, "audio.mp3")
 
-        total_size = os.path.getsize(audio_file)
-        downloaded_size = 0
+            total_size = os.path.getsize(audio_file)
+            downloaded_size = 0
 
-        with open(audio_file, "rb") as f:
-            with open(mp3_file, "wb") as mp3:
-                while True:
-                    chunk = f.read(1024)
-                    if not chunk:
-                        break
+            with open(audio_file, "rb") as f:
+                with open(mp3_file, "wb") as mp3:
+                    while True:
+                        chunk = f.read(1024)
+                        if not chunk:
+                            break
 
-                    mp3.write(chunk)
-                    downloaded_size += len(chunk)
-                    int((downloaded_size / total_size) * 100)
-                    self.emit_audio_progress(downloaded_size, total_size)
+                        mp3.write(chunk)
+                        downloaded_size += len(chunk)
+                        int((downloaded_size / total_size) * 100)
+                        self.emit_audio_progress(downloaded_size, total_size)
 
-        os.remove(audio_file)
-        self.progress_signal.emit(100)
+            os.remove(audio_file)
+            self.progress_signal.emit(100)
+        except Exception as e:
+            self.error_signal.emit(str(e))
 
     def emit_audio_progress(self, processed_size, total_size):
         progress = int((processed_size / total_size) * 100)
@@ -240,11 +254,17 @@ class YouTubeDownloaderGUI(QMainWindow):
 
         self.download_thread = DownloadThread(url, save_path, resolution)
         self.download_thread.progress_signal.connect(self.update_progress)
+        self.download_thread.error_signal.connect(self.show_error_message)
         self.download_thread.start()
 
         self.download_button.setEnabled(False)
         self.status_label.setText("Downloading...")
         self.timer.start(1000)
+
+    def show_error_message(self, error_message):
+        QMessageBox.critical(self, "Error", error_message)
+        self.download_button.setEnabled(True)
+        self.status_label.setText("Error occurred during download!")
 
     def check_download_progress(self):
         if self.download_thread.isFinished():
