@@ -65,11 +65,12 @@ class DownloadThread(QThread):
     progress_signal = pyqtSignal(int)
     error_signal = pyqtSignal(str)
 
-    def __init__(self, url, save_path, resolution=None):
+    def __init__(self, url, save_path, resolution=None, kbps=None):
         super().__init__()
         self.url = url
         self.save_path = save_path
         self.resolution = resolution
+        self.kbps = kbps
 
     def run(self):
         try:
@@ -113,10 +114,11 @@ class DownloadThread(QThread):
     def download_audio(self):
         try:
             yt = YouTube(self.url)
-            audio = yt.streams.filter(only_audio=True).first()
+            audio = yt.streams.filter(only_audio=True, abr=self.kbps).first() if self.kbps else yt.streams.filter(
+                only_audio=True).first()
             audio_file = os.path.join(self.save_path, f"{audio.default_filename}")
             audio.download(self.save_path)
-            mp3_file = os.path.join(self.save_path, "audio.mp3")
+            mp3_file = os.path.join(self.save_path, f"{os.path.splitext(audio.default_filename)[0]}.mp3")
 
             total_size = os.path.getsize(audio_file)
             downloaded_size = 0
@@ -175,23 +177,36 @@ class YouTubeDownloaderGUI(QMainWindow):
         self.format_label = QLabel("Download Format:", self)
         self.format_label.setGeometry(20, 100, 100, 20)
 
-        self.format_mp3 = QRadioButton("MP3", self)
-        self.format_mp3.setGeometry(120, 100, 100, 20)
-        self.format_mp3.setChecked(True)
-        self.format_mp3.clicked.connect(self.hide_resolution_options)
-
-        self.format_mp4 = QRadioButton("MP4", self)
-        self.format_mp4.setGeometry(230, 100, 100, 20)
-        self.format_mp4.clicked.connect(self.show_resolution_options)
-
         self.resolution_label = QLabel("Resolution:", self)
         self.resolution_label.setGeometry(20, 130, 100, 20)
         self.resolution_label.hide()
+
+        self.kbps_label = QLabel("Audio Quality:", self)
+        self.kbps_label.setGeometry(20, 130, 100, 20)
+        self.kbps_label.show()
 
         self.resolution_combo = QComboBox(self)
         self.resolution_combo.setGeometry(120, 130, 150, 20)
         self.resolution_combo.addItems(["360p", "480p", "720p", "1080p"])
         self.resolution_combo.hide()
+
+        self.kbps_combo = QComboBox(self)
+        self.kbps_combo.setGeometry(120, 130, 150, 20)
+        self.kbps_combo.addItems(["128kbps", "256kbps", "320kbps"])
+        self.kbps_combo.show()
+
+        self.format_mp3 = QRadioButton("MP3", self)
+        self.format_mp3.setGeometry(120, 100, 100, 20)
+        self.format_mp3.setChecked(True)
+        self.format_mp3.clicked.connect(self.hide_resolution_options)
+        self.format_mp3.clicked.connect(self.show_kbps_options)
+
+        self.format_mp4 = QRadioButton("MP4", self)
+        self.format_mp4.setGeometry(230, 100, 100, 20)
+        self.format_mp4.clicked.connect(self.show_resolution_options)
+        self.format_mp4.clicked.connect(self.hide_kbps_options)
+
+
 
         self.download_button = QPushButton("Download", self)
         self.download_button.setGeometry(150, 170, 100, 30)
@@ -231,6 +246,14 @@ class YouTubeDownloaderGUI(QMainWindow):
         self.resolution_label.show()
         self.resolution_combo.show()
 
+    def show_kbps_options(self):
+        self.kbps_label.show()
+        self.kbps_combo.show()
+
+    def hide_kbps_options(self):
+        self.kbps_label.hide()
+        self.kbps_combo.hide()
+
     def hide_resolution_options(self):
         self.resolution_label.hide()
         self.resolution_combo.hide()
@@ -249,10 +272,11 @@ class YouTubeDownloaderGUI(QMainWindow):
 
         choice = "MP4" if self.format_mp4.isChecked() else "MP3"
         resolution = self.resolution_combo.currentText() if choice == "MP4" else None
+        kbps = self.kbps_combo.currentText() if choice == "MP3" else None
 
         self.progress_bar.setValue(0)
 
-        self.download_thread = DownloadThread(url, save_path, resolution)
+        self.download_thread = DownloadThread(url, save_path, resolution, kbps)
         self.download_thread.progress_signal.connect(self.update_progress)
         self.download_thread.error_signal.connect(self.show_error_message)
         self.download_thread.start()
