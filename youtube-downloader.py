@@ -206,8 +206,6 @@ class YouTubeDownloaderGUI(QMainWindow):
         self.format_mp4.clicked.connect(self.show_resolution_options)
         self.format_mp4.clicked.connect(self.hide_kbps_options)
 
-
-
         self.download_button = QPushButton("Download", self)
         self.download_button.setGeometry(150, 170, 100, 30)
         self.download_button.setStyleSheet("background-color: #428BCA; color: #FFFFFF;")
