@@ -22,6 +22,7 @@ The YouTube Downloader is a graphical user interface (GUI) application that allo
 
 - Download YouTube videos or audio in MP3 or MP4 format.
 - Choose the desired video resolution (available for MP4 downloads).
+- Choose the desired bit rate resolution (available for MP3 downloads).
 - Progress bar to track the download progress.
 
 ## Requirements
